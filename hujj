@@ -1,0 +1,31 @@
+Cypress.Commands.add('getOtpFromMaildrop', (alias) => {
+  const inboxUrl = `https://maildrop.cc/inbox/${alias}`;
+
+  cy.request(inboxUrl).then((res) => {
+    const html = res.body;
+
+    // Match first email ID from the page (simple regex)
+    const match = html.match(/\/message\/([a-zA-Z0-9-_]+)/);
+    if (!match) throw new Error('No message found in inbox');
+
+    const messageId = match[1];
+
+    // Now request the email content
+    cy.request(`https://maildrop.cc/message/${messageId}`).then((msgRes) => {
+      const emailHtml = msgRes.body;
+
+      // Extract 6-digit OTP (adjust regex if format differs)
+      const otpMatch = emailHtml.match(/\b\d{6}\b/);
+      if (!otpMatch) throw new Error('OTP not found in email');
+
+      const otp = otpMatch[0];
+      cy.wrap(otp).as('otpCode');
+    });
+  });
+});
+
+cy.getOtpFromMaildrop('D-3czt'); // alias from your screenshot
+
+cy.get('@otpCode').then((otp) => {
+  cy.get('input[aria-label="Code"]').type(otp);
+});
