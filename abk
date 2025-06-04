@@ -1,0 +1,32 @@
+Cypress.Commands.add('getOtpFromYopmail', (inboxName) => {
+  const inboxUrl = `https://www.yopmail.com/en/inbox.php?login=${inboxName}`;
+
+  cy.request({
+    method: 'GET',
+    url: inboxUrl
+  }).then((response) => {
+    const html = document.createElement('html');
+    html.innerHTML = response.body;
+
+    const frameMatch = response.body.match(/src="(iframe\.php\?[^"]+)"/);
+    if (!frameMatch) {
+      throw new Error('Iframe URL not found in Yopmail response');
+    }
+
+    const iframeUrl = `https://www.yopmail.com/en/${frameMatch[1]}`;
+    cy.request(iframeUrl).then((iframeRes) => {
+      const otpMatch = iframeRes.body.match(/\b\d{6}\b/);
+      if (!otpMatch) {
+        throw new Error('OTP not found in iframe response');
+      }
+
+      const otp = otpMatch[0];
+      cy.wrap(otp).as('otp');
+    });
+  });
+});
+cy.getOtpFromYopmail(email); // alias sets `@otp`
+
+cy.get('@otp').then((otpCode) => {
+  cy.get('input[aria-label="Code"]', { timeout: 10000 }).should('be.visible').type(otpCode);
+});
