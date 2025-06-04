@@ -1,0 +1,22 @@
+cy.origin('https://yopmail.com', { args: { inboxName } }, ({ inboxName }) => {
+  cy.visit(`/?${inboxName}`);
+  cy.get('#ifinbox', { timeout: 20000 }).then($iframe => {
+    const $body = $iframe.contents().find('body');
+    cy.wrap($body).find('div.m').first().click();
+  });
+
+  cy.wait(3000);
+
+  cy.get('#ifmail', { timeout: 20000 }).then($iframe => {
+    const mailBody = $iframe[0].contentDocument?.body;
+    if (!mailBody) throw new Error('Mail body not accessible');
+
+    const text = mailBody.innerText;
+    const otpMatch = text.match(/\b\d{6}\b/);
+    if (!otpMatch) throw new Error('OTP not found');
+
+    const otpCode = otpMatch[0];
+    cy.log('OTP Code:', otpCode);
+    cy.wrap(otpCode).as('otp');
+  });
+});
