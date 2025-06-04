@@ -1,0 +1,9 @@
+let otpCode = '';
+
+cy.getOtpFromYopmail(email).then((otp) => {
+  otpCode = otp;
+});
+
+cy.origin('https://stgelevatepub.hercrentals.com', { args: { otpCode } }, ({ otpCode }) => {
+  cy.get('input[aria-label="Code"]').type(otpCode);
+});
