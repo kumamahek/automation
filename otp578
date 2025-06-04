@@ -1,0 +1,37 @@
+Cypress.Commands.add('getOtpFrom1SecMail', (login, domain) => {
+  cy.request({
+    method: 'GET',
+    url: `https://www.1secmail.com/api/v1/?action=getMessages&login=${login}&domain=${domain}`,
+  }).then((res) => {
+    const messages = res.body;
+    if (!messages.length) {
+      throw new Error('No OTP email received');
+    }
+
+    const latest = messages[0];
+    const id = latest.id;
+
+    // Fetch email content
+    cy.request({
+      method: 'GET',
+      url: `https://www.1secmail.com/api/v1/?action=readMessage&login=${login}&domain=${domain}&id=${id}`,
+    }).then((mailRes) => {
+      const body = mailRes.body.body || mailRes.body.textBody;
+      const otpMatch = body.match(/\b\d{6}\b/);
+      if (!otpMatch) {
+        throw new Error('OTP not found in email body');
+      }
+
+      cy.wrap(otpMatch[0]).as('otpCode');
+    });
+  });
+});
+
+const emailLogin = 'hercautotest123';
+const emailDomain = '1secmail.com';
+
+cy.getOtpFrom1SecMail(emailLogin, emailDomain);
+
+cy.get('@otpCode').then((otp) => {
+  cy.get('input[aria-label="Code"]').type(otp);
+});
