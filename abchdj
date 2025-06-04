@@ -1,0 +1,71 @@
+Cypress.Commands.add('getOtpFromMaildrop', (mailbox) => {
+  const query = `
+    query GetInbox($mailbox: String!) {
+      ping(message: "Test")
+      inbox(mailbox: $mailbox) {
+        id
+        subject
+        date
+      }
+    }
+  `;
+
+  return cy.request({
+    method: 'POST',
+    url: 'https://api.maildrop.cc/graphql',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: {
+      operationName: 'GetInbox',
+      variables: { mailbox },
+      query
+    },
+    failOnStatusCode: false
+  }).then((response) => {
+    if (response.status !== 200) {
+      throw new Error(`❌ Maildrop API request failed: ${response.status}`);
+    }
+
+    const inbox = response.body.data.inbox;
+    if (!inbox.length) {
+      throw new Error('❌ No emails found in inbox');
+    }
+
+    const latestMailId = inbox[0].id;
+
+    // Now request full email content
+    const msgQuery = `
+      query GetMessage($mailbox: String!, $id: String!) {
+        message(mailbox: $mailbox, id: $id) {
+          data
+        }
+      }
+    `;
+
+    return cy.request({
+      method: 'POST',
+      url: 'https://api.maildrop.cc/graphql',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: {
+        operationName: 'GetMessage',
+        variables: {
+          mailbox,
+          id: latestMailId
+        },
+        query: msgQuery
+      }
+    });
+  }).then((res) => {
+    const emailData = res.body.data.message.data;
+    const otpMatch = emailData.match(/\b\d{6}\b/);
+    if (!otpMatch) {
+      throw new Error('❌ OTP not found in email content');
+    }
+    const otpCode = otpMatch[0];
+    cy.log('✅ OTP Extracted:', otpCode);
+    return cy.wrap(otpCode);
+  });
+});
