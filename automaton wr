@@ -1,0 +1,39 @@
+Cypress.Commands.add('getOtpFromMaildrop', (alias) => {
+  const inboxUrl = `https://maildrop.cc/inbox/?mailbox=${alias}`;
+
+  cy.request(inboxUrl).then((res) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(res.body, 'text/html');
+    const messageLink = doc.querySelector('.message-list .message a');
+
+    if (!messageLink) {
+      throw new Error('❌ No message found in inbox');
+    }
+
+    const href = messageLink.getAttribute('href');
+    const messageId = href.split('/').pop(); // grabs the last part from `/message/<id>`
+
+    cy.request(`https://maildrop.cc${href}`).then((msgRes) => {
+      const msgDoc = parser.parseFromString(msgRes.body, 'text/html');
+      const bodyText = msgDoc.body.innerText;
+
+      const otpMatch = bodyText.match(/\b\d{6}\b/);
+      if (!otpMatch) {
+        throw new Error('❌ OTP not found in message');
+      }
+
+      const otpCode = otpMatch[0];
+      cy.log('✅ OTP Code:', otpCode);
+      cy.wrap(otpCode).as('otpCode');
+    });
+  });
+});
+
+
+const mailbox = 'HercAutomationstglightusertest41703';
+
+cy.getOtpFromMaildrop(mailbox);
+
+cy.get('@otpCode').then((otp) => {
+  cy.get('input[aria-label="Code"]').should('be.visible').type(otp);
+});
