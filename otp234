@@ -1,0 +1,39 @@
+Cypress.Commands.add('getOtpFromYopmail', (inboxName) => {
+  const url = `https://www.yopmail.com/en/inbox.php?login=${inboxName}&pwa=1&v=2.5`;
+
+  return cy.request({
+    method: 'GET',
+    url,
+    headers: {
+      'Content-Type': 'text/html',
+    }
+  }).then((response) => {
+    const html = document.createElement('html');
+    html.innerHTML = response.body;
+
+    const mailIds = [...html.querySelectorAll('.m')].map(el => el.getAttribute('onclick'));
+    const firstMailIdMatch = mailIds[0]?.match(/'(\d+)'/);
+
+    if (!firstMailIdMatch) {
+      throw new Error('No mail ID found');
+    }
+
+    const mailId = firstMailIdMatch[1];
+
+    return cy.request(`https://www.yopmail.com/en/mail.php?b=${inboxName}&id=${mailId}`)
+      .then(mailResponse => {
+        const mailHtml = document.createElement('html');
+        mailHtml.innerHTML = mailResponse.body;
+
+        const bodyText = mailHtml.body.innerText;
+        const otpMatch = bodyText.match(/\b\d{6}\b/);
+        if (!otpMatch) {
+          throw new Error('OTP not found in mail content');
+        }
+
+        const otp = otpMatch[0];
+        cy.log(`✅ OTP extracted: ${otp}`);
+        return cy.wrap(otp);
+      });
+  });
+});
