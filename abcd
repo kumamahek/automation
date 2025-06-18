@@ -1,22 +1,73 @@
-cy.origin('https://yopmail.com', { args: { inboxName } }, ({ inboxName }) => {
-  cy.visit(`/?${inboxName}`);
-  cy.get('#ifinbox', { timeout: 20000 }).then($iframe => {
-    const $body = $iframe.contents().find('body');
-    cy.wrap($body).find('div.m').first().click();
+import React, { useRef, useCallback, useMemo } from 'react';
+import { AgGridReact } from 'ag-grid-react';
+import type { AgGridReact as AgGridReactType } from 'ag-grid-react';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
+import 'ag-grid-enterprise';
+
+const RuleGrid = () => {
+  const gridRef = useRef<AgGridReactType>(null);
+
+  const columnDefs = useMemo(() => [
+    { field: 'ruleId', headerName: 'Rule ID' },
+    { field: 'ruleName', headerName: 'Rule Name' },
+    { field: 'ruleNameStatus', headerName: 'Status' },
+    { field: 'ruleType', headerName: 'Rule Type' }
+  ], []);
+
+  const defaultColDef = useMemo(() => ({
+    resizable: true,
+    sortable: true,
+    filter: true,
+  }), []);
+
+  const getServerSideDatasource = () => ({
+    getRows: async (params: any) => {
+      const pageNum = Math.floor(params.request.startRow / params.request.endRow) || 0;
+      const pageSize = params.request.endRow - params.request.startRow;
+      const sortModel = params.request.sortModel || [];
+      const sortColumn = sortModel[0]?.colId || 'updatedDt';
+      const sortDirection = sortModel[0]?.sort?.toUpperCase() || 'DESC';
+
+      const url = `http://localhost:8080/api/v5/rule/getAll/RT009?pageNum=${pageNum}&size=${pageSize}&sortColumn=${sortColumn}&sortDirection=${sortDirection}`;
+      console.log("API Call:", url);
+
+      try {
+        const response = await fetch(url);
+        const result = await response.json();
+        const rows = result.data || [];
+        const total = result.totalRecords || 0;
+
+        params.successCallback(rows, total);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        params.failCallback();
+      }
+    }
   });
 
-  cy.wait(3000);
+  const onGridReady = useCallback((params: any) => {
+    const datasource = getServerSideDatasource();
+    params.api.setServerSideDatasource(datasource);
+  }, []);
 
-  cy.get('#ifmail', { timeout: 20000 }).then($iframe => {
-    const mailBody = $iframe[0].contentDocument?.body;
-    if (!mailBody) throw new Error('Mail body not accessible');
+  return (
+    <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
+      <AgGridReact
+        ref={gridRef}
+        columnDefs={columnDefs}
+        defaultColDef={defaultColDef}
+        rowModelType="serverSide"
+        pagination={true}
+        paginationPageSize={30}
+        cacheBlockSize={30}
+        animateRows={true}
+        onGridReady={onGridReady}
+        // Bypass TS error manually (optional):
+        {...({ serverSideStoreType: 'partial' } as any)}
+      />
+    </div>
+  );
+};
 
-    const text = mailBody.innerText;
-    const otpMatch = text.match(/\b\d{6}\b/);
-    if (!otpMatch) throw new Error('OTP not found');
-
-    const otpCode = otpMatch[0];
-    cy.log('OTP Code:', otpCode);
-    cy.wrap(otpCode).as('otp');
-  });
-});
+export default RuleGrid;
