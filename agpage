@@ -1,0 +1,75 @@
+import React, { useCallback, useMemo, useRef } from 'react';
+import { AgGridReact } from 'ag-grid-react';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
+import 'ag-grid-enterprise';
+
+const RuleGrid = () => {
+  const gridRef = useRef();
+
+  const columnDefs = useMemo(() => [
+    { field: 'ruleId', headerName: 'Rule ID' },
+    { field: 'ruleName', headerName: 'Rule Name' },
+    { field: 'ruleNameStatus', headerName: 'Status' },
+    { field: 'ruleType', headerName: 'Rule Type' }
+  ], []);
+
+  const defaultColDef = useMemo(() => ({
+    resizable: true,
+    sortable: true,
+    filter: true,
+  }), []);
+
+  const getServerSideDatasource = () => {
+    return {
+      getRows: async (params) => {
+        const pageNum = Math.floor(params.request.startRow / params.request.endRow) || 0;
+        const pageSize = params.request.endRow - params.request.startRow;
+
+        // Optional: Extract sorting
+        const sortModel = params.request.sortModel;
+        const sortColumn = sortModel[0]?.colId || 'updatedDt';
+        const sortDirection = sortModel[0]?.sort?.toUpperCase() || 'DESC';
+
+        const url = `http://localhost:8080/api/v5/rule/getAll/RT009?pageNum=${pageNum}&size=${pageSize}&sortColumn=${sortColumn}&sortDirection=${sortDirection}`;
+
+        try {
+          const response = await fetch(url);
+          const result = await response.json();
+
+          const rows = result.data || [];
+          const totalRows = result.totalRecords || 0;
+
+          params.successCallback(rows, totalRows);
+        } catch (error) {
+          console.error('Failed to fetch rows:', error);
+          params.failCallback();
+        }
+      }
+    };
+  };
+
+  const onGridReady = useCallback((params) => {
+    const datasource = getServerSideDatasource();
+    params.api.setServerSideDatasource(datasource);
+  }, []);
+
+  return (
+    <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
+      <AgGridReact
+        ref={gridRef}
+        columnDefs={columnDefs}
+        defaultColDef={defaultColDef}
+        rowModelType="serverSide"
+        serverSideStoreType="partial" // Recommended for pagination
+        pagination={true}
+        paginationPageSize={30}
+        cacheBlockSize={30}
+        animateRows={true}
+        onGridReady={onGridReady}
+      />
+    </div>
+  );
+};
+
+export default RuleGrid;
